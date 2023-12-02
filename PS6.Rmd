@@ -1,0 +1,299 @@
+---
+title: "PS6"
+author: "Katie Rochleau-Rice"
+date: "2023-11-27"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(readr)
+```
+
+
+
+**1.1 Scripps CO2 Data**
+
+1.1.1
+```{r}
+CO2Data <- read_delim("C:/Users/tearo/Documents/INFO 201/DATA/scripps-co2.csv.bz2")
+CO2Data1 <- CO2Data%>%
+  select(year, month, co2)
+
+head(CO2Data1, 10)
+```
+
+1.1.2
+
+A line in this dataset represents a single observation of the CO2 concentration in ppm sorted by year and ordered by month.
+
+1.1.3
+```{r}
+CO2Data1 %>%
+  filter(co2 < 0)
+```
+
+Missing values in this dataset are coded as "-99.99". While there are no "NA" values to obviously denote a missing value, the few "-99.99"'s show these are the only negative numbers and are consistent outliers, thus you can infer that they are missing values within the rest of the comprehensive dataset. 
+
+1.1.4
+```{r}
+minY <- CO2Data1 %>%
+  select(year) %>%
+  min()
+
+minM <- CO2Data1 %>%
+  select(month) %>%
+  min()
+
+maxY <- CO2Data1 %>%
+  select(year) %>%
+  max()
+
+maxM <- CO2Data1 %>%
+  select(month) %>%
+  max()
+
+cat("Earliest observation recorded is month", minM, "in", minY, "\n")
+cat("Latest observation recorded is month", maxM, "in", maxY, "\n")
+```
+
+This dataset records observations from January 1958 to December 2023. 
+
+1.1.5
+```{r}
+CO2Data1$date <- as_date(paste(CO2Data1$year, CO2Data1$month, "01", sep="-"))
+CO2Data1
+
+CO2Data1 %>% 
+  filter(co2 > 0) %>% #getting rid of outliers
+  ggplot(aes(date, co2))+
+  geom_line()+
+  geom_point(col = "red", alpha = 0.5, size = 0.5)+
+  labs(x = "Year", y = "CO2 Concentration in PPM", title = "Mauna Loa observatory CO2 concentration in Atmosphere Over Time")
+  
+```
+
+1.1.6
+
+Over the past 60 years or so, the concentration of CO2 in the atmosphere has increased at pretty much a consistent rate. No spikes or decreases occurred at any time during this period. This scatter plot demonstrates this upward trend that grew roughly 113 ppm in this period. 
+
+
+**1.2 HadCRUT temperature data**
+
+1.2.1
+```{r}
+temp<- read_delim("../DATA/hadcrut-5.0.1.0-annual.csv.bz2")
+
+temp <- temp %>%
+  select(`Time`, `Anomaly (deg C)`) %>%
+  rename(year = Time, TempAnomaly_in_C = `Anomaly (deg C)`)
+
+head(temp, 10)
+```
+
+1.2.2
+
+A line in this dataset represents a single observation of the temperature anomaly in Celsius (C) sorted by year.
+
+
+1.2.3
+```{r}
+min <- temp %>%
+  select(year) %>%
+  min()
+
+max <- temp %>%
+  select(year) %>%
+  max()
+
+cat("Earliest Year Recorded:", min, "\n")
+cat("Latest Year Recorded:", max)
+```
+This dataset records observations from the year 1850 to 2023. 
+
+
+1.2.4
+```{r}
+
+pib <- temp %>%
+  filter(year <= 1900) %>%
+  summarize(mean(TempAnomaly_in_C))
+
+temp$`Compared to Pre-Industrial_Baseline` <- temp$TempAnomaly_in_C - as.numeric(pib)
+temp
+
+
+sixtyone2ninetyAVG <- temp %>%
+  filter(1961 <= year & year <= 1990) %>%
+  summarize(mean(TempAnomaly_in_C))
+
+
+
+compare <- data.frame(pib, sixtyone2ninetyAVG)
+
+compare %>%
+  rename(`Pre-Industrial Baseline` = `mean.TempAnomaly_in_C.`) %>%
+  rename(`Average Between 1961-1990` = `mean.TempAnomaly_in_C..1`)
+
+```
+
+1.2.5
+```{r}
+temp %>%
+  ggplot(aes(year, `Compared to Pre-Industrial_Baseline`)) +
+  geom_point()+
+  labs(x = "Year", y = "Pre-Industrial Baseline", title = "Global Surface Temperature Compared to the Pre-Industrial Baseline Over Time")
+```
+This scatterplot shows how the global surface temperature changed over time; using the anomaly with respect to  the pre-industrial baseline.
+
+
+1.2.6
+
+Over the last 170 years, the global temperature has made a significant increase and created an overall upward trend. The points show that roughly between 1850-1900 and 1945-1975, there was a brief point of temperature decrease. However, the periods of roughly 1900-1945 and 1975-2023 have increased much more drastically than it ever went down. Since that latest decrease, the temperature increased at a much steeper rate than any other time recorded on this graph. 
+
+
+
+
+**1.3 How is global temperature related to CO2 levels?**
+
+1.3.1
+
+What both data sets have in common is the column: "year". Each data frame is recording different aspects of the environment but both organized by time. The CO2 data is more specific in that it breaks it down into monthly observations.
+
+1.3.2
+
+To merge these two data sets, we must reduce the CO2 data to strictly yearly values. We can do this by finding the average of the twelve months for the year, and using that number as the collective year value for CO2 data. Then, you can use this column name as the merge key and combine based on "year" with left join.
+
+
+1.3.3
+
+```{r}
+#find the average for the year CO2 data
+
+CO2DataByYear <- CO2Data1 %>%
+  group_by(year) %>%
+  summarize(mean(co2)) %>%
+  rename(`CO2 by Year`= `mean(co2)`)
+
+CO2DataByYear
+```
+
+
+
+
+```{r}
+merged_data <- left_join(temp, CO2DataByYear)
+
+head(merged_data, 10)
+```
+
+I am going to use left join to merge these data sets because both have the common column of "year" on the left-hand side that makes it easy to combine with. 
+
+
+
+1.3.4 (a, b, c, d, e, f)
+```{r}
+merged_data %>%
+  filter(`CO2 by Year` > 300) %>%
+  ggplot(aes(`CO2 by Year`, `Compared to Pre-Industrial_Baseline`, col = year))+
+  scale_color_continuous(breaks = seq(2020, 1950, by = -10), low = "blue", high = "red")+
+  geom_point() +
+  labs(x = "CO2 Concentration (ppm)", y = "Temperature Anomaly \n (w.r.t 1850-1900 average)", color = "Decade") +
+  geom_hline(yintercept = 1.5) +
+  ylim(0, 1.5)+
+  xlim(325, 415)+
+  geom_smooth(method = "lm", se = FALSE, col = "black")
+```
+
+
+
+**2 Global Surface Temperature VS. Lower Troposphere Temperature**
+
+2.1
+```{r}
+uah <- read_delim("../DATA/UAH-lower-troposphere-wide.csv.bz2")
+uah <- uah %>%
+  select(year, month, globe)
+
+hadcrut <- read_delim("../DATA/hadcrut-5.0.1.0-annual.csv.bz2")
+hadcrut <- hadcrut %>%
+  select(`Time`, `Anomaly (deg C)`) %>%
+  rename(year = Time, TempAnomaly_in_C = `Anomaly (deg C)`)
+  
+  
+head(uah, 10)
+head(hadcrut, 10)
+```
+
+2.2
+```{r}
+
+uahYearAVG <- uah %>%
+  group_by(year) %>%
+  summarize(mean(globe)) %>%
+  rename(`Toposphere Yearly Average`= `mean(globe)`)
+
+uahYearAVG
+  
+```
+
+2.3
+```{r}
+
+merged_data1 <- left_join(uahYearAVG, hadcrut) 
+
+head(merged_data1, 10)
+```
+
+2.4
+This dataset is in wide form because both Global Surface Temperature and Troposphere Temperature are similar types of data that denote two different temperatures.
+
+
+
+2.5
+```{r}
+merged_data1Long <- merged_data1 %>%
+  rename(surface = TempAnomaly_in_C)%>%
+  rename(`lower troposphere` = `Toposphere Yearly Average`) %>%
+  pivot_longer(!c(year),
+               values_to = "anomaly",
+               names_to = "type")
+
+head(merged_data1Long, 10)
+```
+
+
+
+ 
+2.6
+```{r}
+AvgTempAnomaly <- merged_data1 %>%
+  filter(year >= 1980) %>%
+  summarize(mean(TempAnomaly_in_C))
+
+merged_data1$Average_Temperature_Anomaly <- merged_data1$TempAnomaly_in_C - as.numeric(AvgTempAnomaly)
+merged_data1
+
+
+merged_data1LongCal <- merged_data1 %>%
+  rename(`Surface Temperature Yearly Average` = `Average_Temperature_Anomaly`)%>%
+  select(year, `Toposphere Yearly Average`, `Surface Temperature Yearly Average`) %>%
+  pivot_longer(!c(year),
+               values_to = "anomaly",
+               names_to = "type")
+
+head(merged_data1LongCal, 10)
+
+
+merged_data1LongCal %>%
+  ggplot(aes(year, anomaly, col = type)) +
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Year", y = "Temperature Anomaly", title = "Temperature Anomaly Over Time", color = "Type")
+```
+
+From this scatter plot and the lines of best fit, you are able to see that the surface temperature is growing faster. While both temperature types are increasing in an upward trend, the surface temperature is much steeper than the troposphere average temperature. 
+
+
+
+This Problem Set took me roughly 6 hours.
